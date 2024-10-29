@@ -1,0 +1,25 @@
+---
+- name: Dev ortamı için Git yükleme
+  hosts: _dev_server
+  become: yes
+  tasks:
+   
+    - name: Gerekli paketleri güncelle (RedHat/CentOS)
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Git'i yükle (RedHat/CentOS)
+      yum:
+        name: git
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Git versiyonunu kontrol et
+      command: git --version
+      register: git_version
+
+    - name: Git versiyonunu göster
+      debug:
+        msg: "Yüklü Git versiyonu: {{ git_version.stdout }}"

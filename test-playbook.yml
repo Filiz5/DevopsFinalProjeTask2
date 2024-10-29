@@ -1,0 +1,23 @@
+---
+- name: Test ortamı için Nginx yükleme
+  hosts: _test_server  
+  become: yes  
+  tasks:
+    
+    - name: Gerekli paketleri güncelle (RedHat/CentOS tabanlı sistemler)
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Nginx'i yükle (RedHat/CentOS tabanlı sistemler)
+      yum:
+        name: nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Nginx servisini başlat
+      service:
+        name: nginx
+        state: started
+        enabled: yes

@@ -1,0 +1,43 @@
+---
+- name: Staging ortamı için Docker yükleme
+  hosts: _staging_server  
+  become: yes  
+  tasks:
+    - name: Gerekli paketleri güncelle (RedHat/CentOS tabanlı sistemler)
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Docker bağımlılıklarını yükle (RedHat/CentOS tabanlı sistemler)
+      yum:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Docker deposunu manuel olarak ekle (CentOS için sabitlenmiş CentOS 7 deposu)
+      copy:
+        content: |
+          [docker-ce-stable]
+          name=Docker CE Stable - $basearch
+          baseurl=https://download.docker.com/linux/centos/7/$basearch/stable
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.docker.com/linux/centos/gpg
+        dest: /etc/yum.repos.d/docker-ce.repo
+      when: ansible_os_family == "RedHat"
+
+    - name: Docker'ı yükle (RedHat/CentOS tabanlı sistemler)
+      yum:
+        name: docker-ce
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Docker servisini başlat ve etkinleştir
+      service:
+        name: docker
+        state: started
+        enabled: yes
