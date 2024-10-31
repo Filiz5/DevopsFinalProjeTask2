@@ -28,7 +28,7 @@ pipeline {
         stage('Create Directory for Key Pair') {
             steps {
                 script {
-                    sh "mkdir -p ${PIPELINE_NAME}"
+                    sh "mkdir -p ${WORKSPACE}"
                 }
             }
         }
@@ -40,8 +40,8 @@ pipeline {
             steps {
                 script {
                     sh """
-                    aws ec2 create-key-pair --key-name ${params.WORKSPACE}-key --query 'KeyMaterial' --output text --region us-east-1 > ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
-                    chmod 400 ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
+                    aws ec2 create-key-pair --key-name ${params.WORKSPACE}-key --query 'KeyMaterial' --output text --region us-east-1 > ${WORKSPACE}/${params.WORKSPACE}-key.pem
+                    chmod 400 ${WORKSPACE}/${params.WORKSPACE}-key.pem
                     """
                 }
             }
@@ -65,9 +65,14 @@ pipeline {
             }
             steps {
                 script {
-                    def instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
-                    if (instanceId == "") {
-                        error("Instance ID not found. Make sure the output variable 'instance_id' is defined in the Terraform configuration.")
+                    def instanceId
+                    try {
+                        instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
+                    } catch (Exception e) {
+                        error("Instance ID not found. Make sure the output variable 'instance_id' is defined in the Terraform configuration and that 'terraform apply' has been run successfully.")
+                    }
+                    if (!instanceId) {
+                        error("Instance ID is empty. Please check the Terraform configuration for output variable 'instance_id'.")
                     }
                     echo "Instance ID: ${instanceId}"
                 }
@@ -109,7 +114,7 @@ pipeline {
                 script {
                     sh """
                     aws ec2 delete-key-pair --key-name ${params.WORKSPACE}-key --region us-east-1
-                    rm -f ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
+                    rm -f ${WORKSPACE}/${params.WORKSPACE}-key.pem
                     """
                 }
             }
@@ -126,7 +131,7 @@ pipeline {
                 sh 'ansible-inventory -i inventory_aws_ec2.yml --graph'
                 sh """
                     export ANSIBLE_HOST_KEY_CHECKING=False
-                    export ANSIBLE_PRIVATE_KEY_FILE="${PIPELINE_NAME}/${params.WORKSPACE}-key.pem"
+                    export ANSIBLE_PRIVATE_KEY_FILE="${WORKSPACE}/${params.WORKSPACE}-key.pem"
                     ansible-playbook -i inventory_aws_ec2.yml ${params.WORKSPACE}-playbook.yml -vv
                 """
             }
