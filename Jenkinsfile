@@ -24,7 +24,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Create Directory for Key Pair') {
             steps {
                 script {
@@ -47,7 +47,7 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Terraform Init & Apply') {
             when {
                 expression { return !params.DESTROY }
             }
@@ -55,6 +55,21 @@ pipeline {
                 script {
                     sh 'terraform init'
                     sh "terraform apply --auto-approve"
+                }
+            }
+        }
+
+        stage('Retrieve Instance ID') {
+            when {
+                expression { return !params.DESTROY }
+            }
+            steps {
+                script {
+                    def instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
+                    if (instanceId == "") {
+                        error("Instance ID not found. Make sure the output variable 'instance_id' is defined in the Terraform configuration.")
+                    }
+                    echo "Instance ID: ${instanceId}"
                 }
             }
         }
