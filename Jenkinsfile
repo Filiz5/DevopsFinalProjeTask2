@@ -1,10 +1,22 @@
 pipeline {
     agent any
+    environment {
+        PIPELINE_NAME = "${env.JOB_NAME}"
+    }
     parameters {
         choice(name: 'WORKSPACE', choices: ['dev', 'staging', 'prod', 'test'], description: 'Terraform workspace seçiniz')
         booleanParam(name: 'DESTROY', defaultValue: false, description: 'Kaynakları silmek istiyor musunuz?')
     }
     stages {
+
+        stage('Print Pipeline Name') {
+            steps {
+                script {
+                    echo "Pipeline Name: ${PIPELINE_NAME}"
+                }
+            }
+        }
+        
         stage('Set Workspace') {
             steps {
                 script {
@@ -19,12 +31,13 @@ pipeline {
             steps {
                 script {
                     sh """
-                    aws ec2 create-key-pair --key-name ${params.WORKSPACE}-key --query 'KeyMaterial' --output text --region us-east-1 > ${WORKSPACE}-key.pem
-                    chmod 400 /var/lib/jenkins/workspace/task-2-solution/${WORKSPACE}-key.pem
+                    aws ec2 create-key-pair --key-name ${params.WORKSPACE}-key --query 'KeyMaterial' --output text --region us-east-1 > ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
+                    chmod 400 ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
                     """
                 }
             }
         }
+        
         stage('Terraform Apply') {
             when {
                 expression { return !params.DESTROY }
@@ -36,6 +49,21 @@ pipeline {
                 }
             }
         }
+        
+        stage('Wait for Instance Status Check') {
+            when {
+               expression { return !params.DESTROY }
+            }
+            steps {
+                script {
+            def instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
+            echo "Waiting for instance ${instanceId} to pass status checks..."
+            sh """
+            aws ec2 wait instance-status-ok --instance-ids ${instanceId} --region us-east-1
+            """
+        }
+    }
+}
 
         stage('Terraform Destroy') {
             when {
@@ -48,6 +76,7 @@ pipeline {
                 }
             }
         }
+
         
         stage('Delete AWS Key Pair') {
             when {
@@ -57,7 +86,7 @@ pipeline {
                 script {
                     sh """
                     aws ec2 delete-key-pair --key-name ${params.WORKSPACE}-key --region us-east-1
-                    rm -f /var/lib/jenkins/workspace/task-2-solution/${WORKSPACE}-key.pem
+                    rm -f ${PIPELINE_NAME}/${params.WORKSPACE}-key.pem
                     """
                 }
             }
@@ -74,8 +103,8 @@ pipeline {
                 sh 'ansible-inventory -i inventory_aws_ec2.yml --graph'
                 sh """
                     export ANSIBLE_HOST_KEY_CHECKING=False
-                    export ANSIBLE_PRIVATE_KEY_FILE="/var/lib/jenkins/workspace/task-2-solution/${WORKSPACE}-key.pem"
-                    ansible-playbook -i inventory_aws_ec2.yml ${WORKSPACE}-playbook.yml
+                    export ANSIBLE_PRIVATE_KEY_FILE="${PIPELINE_NAME}/${params.WORKSPACE}-key.pem"
+                    ansible-playbook -i inventory_aws_ec2.yml ${params.WORKSPACE}-playbook.yml -vv
                 """
             }
         }
