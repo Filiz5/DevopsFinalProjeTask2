@@ -16,7 +16,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Set Workspace') {
             steps {
                 script {
@@ -24,6 +24,15 @@ pipeline {
                 }
             }
         }
+        
+        stage('Create Directory for Key Pair') {
+            steps {
+                script {
+                    sh "mkdir -p ${PIPELINE_NAME}"
+                }
+            }
+        }
+
         stage('Generate AWS Key Pair') {
             when {
                 expression { return !params.DESTROY }
@@ -37,7 +46,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Terraform Apply') {
             when {
                 expression { return !params.DESTROY }
@@ -49,21 +58,21 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Wait for Instance Status Check') {
             when {
-               expression { return !params.DESTROY }
+                expression { return !params.DESTROY }
             }
             steps {
                 script {
-            def instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
-            echo "Waiting for instance ${instanceId} to pass status checks..."
-            sh """
-            aws ec2 wait instance-status-ok --instance-ids ${instanceId} --region us-east-1
-            """
+                    def instanceId = sh(script: "terraform output -raw instance_id", returnStdout: true).trim()
+                    echo "Waiting for instance ${instanceId} to pass status checks..."
+                    sh """
+                    aws ec2 wait instance-status-ok --instance-ids ${instanceId} --region us-east-1
+                    """
+                }
+            }
         }
-    }
-}
 
         stage('Terraform Destroy') {
             when {
@@ -77,7 +86,6 @@ pipeline {
             }
         }
 
-        
         stage('Delete AWS Key Pair') {
             when {
                 expression { return params.DESTROY }
@@ -107,13 +115,6 @@ pipeline {
                     ansible-playbook -i inventory_aws_ec2.yml ${params.WORKSPACE}-playbook.yml -vv
                 """
             }
-        }
-    }
-    post {
-        always {
-            archiveArtifacts artifacts: '*.pem', fingerprint: true
-            // Eğer ihtiyacınız yoksa pem dosyalarını silmek için uncomment edin
-            // sh 'rm -f *.pem'
         }
     }
 }
